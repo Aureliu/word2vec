@@ -18,7 +18,7 @@
 #include <math.h>
 #include <pthread.h>
 
-#define MAX_STRING 100
+#define MAX_STRING 100		// The max length of a word is 98, and the last character (98) of return word is null.
 #define EXP_TABLE_SIZE 1000
 #define MAX_EXP 6
 #define MAX_SENTENCE_LENGTH 1000
@@ -28,7 +28,7 @@ const int vocab_hash_size = 30000000;  // Maximum 30 * 0.7 = 21M words in the vo
 
 typedef float real;                    // Precision of float numbers
 
-struct vocab_word {
+struct vocab_word {					//@AureDi the structure of the vocabulary
   long long cn;
   int *point;
   char *word, *code, codelen;
@@ -67,21 +67,21 @@ void InitUnigramTable() {
   }
 }
 
-// Reads a single word from a file, assuming space + tab + EOL to be word boundaries
+// Reads a single word from a file, assuming space + tab + EOL to be word boundaries			@AureDi Done
 void ReadWord(char *word, FILE *fin) {
   int a = 0, ch;
   while (!feof(fin)) {
     ch = fgetc(fin);
     if (ch == 13) continue;
     if ((ch == ' ') || (ch == '\t') || (ch == '\n')) {
-      if (a > 0) {
-        if (ch == '\n') ungetc(ch, fin);
-        break;
+      if (a > 0) {			//@AureDi if the first character is not a space + tab + EOL, then we have a word and we need to do is to add a null the end of word.Now we get a string of a word.
+        if (ch == '\n') ungetc(ch, fin); //@AureDi don't read \n and left it for next word. The next word converts \n and add </s> to the end of the sentence.
+        break; 
       }
       if (ch == '\n') {
         strcpy(word, (char *)"</s>");
         return;
-      } else continue;
+      } else continue;				//@AureDi if the first character is space / tab, ignore it and read next character. avoid the situation of two characters
     }
     word[a] = ch;
     a++;
@@ -90,31 +90,31 @@ void ReadWord(char *word, FILE *fin) {
   word[a] = 0;
 }
 
-// Returns hash value of a word
+// Returns hash value of a word			@AureDi Done
 int GetWordHash(char *word) {
   unsigned long long a, hash = 0;
-  for (a = 0; a < strlen(word); a++) hash = hash * 257 + word[a];
+  for (a = 0; a < strlen(word); a++) hash = hash * 257 + word[a];	//@AureDi get a hash code
   hash = hash % vocab_hash_size;
   return hash;
 }
 
-// Returns position of a word in the vocabulary; if the word is not found, returns -1
+// Returns position of a word in the vocabulary; if the word is not found, returns -1 			@AureDi Done
 int SearchVocab(char *word) {
   unsigned int hash = GetWordHash(word);
   while (1) {
-    if (vocab_hash[hash] == -1) return -1;
-    if (!strcmp(word, vocab[vocab_hash[hash]].word)) return vocab_hash[hash];
-    hash = (hash + 1) % vocab_hash_size;
+    if (vocab_hash[hash] == -1) return -1;	//@AureDi If there is no hash code, return -1. 
+    if (!strcmp(word, vocab[vocab_hash[hash]].word)) return vocab_hash[hash];	//@AureDi IF find the word in the vocabolary, return its position in vocabulaty.
+    hash = (hash + 1) % vocab_hash_size;	//@AureDi If the hash code extend the vocab_hash, traverse it from start (0).
   }
   return -1;
 }
 
-// Reads a word and returns its index in the vocabulary
+// Reads a word and returns its index in the vocabulary		//@AureDi for construct a sencetce 			@AureDi Done
 int ReadWordIndex(FILE *fin) {
   char word[MAX_STRING];
   ReadWord(word, fin);
-  if (feof(fin)) return -1;
-  return SearchVocab(word);
+  if (feof(fin)) return -1;	//@AureDi If there is an end of file, return -1.
+  return SearchVocab(word);	//@AureDi Return the position of word in the vocabulary.
 }
 
 // Adds a word to the vocabulary
@@ -384,20 +384,20 @@ void *TrainModelThread(void *id) {
       alpha = starting_alpha * (1 - word_count_actual / (real)(iter * train_words + 1));
       if (alpha < starting_alpha * 0.0001) alpha = starting_alpha * 0.0001;
     }
-    if (sentence_length == 0) {
+    if (sentence_length == 0) {		//@AureDi Read a sentence
       while (1) {
         word = ReadWordIndex(fi);
-        if (feof(fi)) break;
-        if (word == -1) continue;
+        if (feof(fi)) break;			//@AureDi If not the end of the file, return 0.
+        if (word == -1) continue;		//@AureDi not a word in the vocabulary, discard it and continue
         word_count++;
-        if (word == 0) break;
+        if (word == 0) break;			//@AureDi Now, we read the </s>, the equal symbol of \n. It is also the definition of end in a sentence. 
         // The subsampling randomly discards frequent words while keeping the ranking same
         if (sample > 0) {
           real ran = (sqrt(vocab[word].cn / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].cn;
           next_random = next_random * (unsigned long long)25214903917 + 11;
           if (ran < (next_random & 0xFFFF) / (real)65536) continue;
         }
-        sen[sentence_length] = word;
+        sen[sentence_length] = word;	//word is the index of a word in the directory.
         sentence_length++;
         if (sentence_length >= MAX_SENTENCE_LENGTH) break;
       }
@@ -419,8 +419,7 @@ void *TrainModelThread(void *id) {
     for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
     next_random = next_random * (unsigned long long)25214903917 + 11;
     b = next_random % window;
-    if (cbow) {  //train the cbow architecture
-      // in -> hidden
+    if (cbow) {  //train the cbow architecture    // in -> hidden
       cw = 0;
       for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
         c = sentence_position - window + a;
